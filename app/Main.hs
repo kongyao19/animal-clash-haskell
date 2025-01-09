@@ -8,6 +8,21 @@ data Card = Card {animal :: Animal, quantity :: Int}
 
 data Winner = P1 | P2 | Draw
     deriving Show
+
+type Deck = [Card]
+
+createDeck :: Deck
+createDeck = [Card Worm 5, Card Chicken 4, Card Fox 3, Card Bear 2, Card Dinosaur 1]
+
+checkDeck :: Card -> Deck -> Bool
+checkDeck c d = any isValidCard d
+    where
+        isValidCard (Card a q) = a == animal c && q >= quantity c
+
+chooseCard :: Card -> Deck -> Maybe Card
+chooseCard c d = case checkDeck c d of
+    True -> Just c
+    False -> Nothing 
     
 battle :: Card -> Card -> Ordering
 battle (Card a1 q1) (Card a2 q2)
