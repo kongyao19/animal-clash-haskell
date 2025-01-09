@@ -1,5 +1,7 @@
 module Main where
 
+import Control.Monad
+
 data Animal = Worm | Chicken | Fox | Bear | Dinosaur
     deriving (Show, Eq, Ord)
 
@@ -55,15 +57,19 @@ player1Deck = createDeck
 player2Deck :: Deck
 player2Deck = createDeck
 
+printDeck :: Deck -> IO()
+printDeck d = do
+    putStrLn "Current deck: "
+    mapM_ print d
+
 play :: Deck -> IO Card
 play d = do
-    putStrLn "Current Deck: " 
-    mapM_ print d
+    printDeck d
     putStr "Please choose your card: "
     cardChoice <- getLine 
     case parseCard cardChoice of
-        Just c -> if checkDeck c d then return c else putStrLn "Not enough cards, please try again." >> play d
-        Nothing -> putStrLn "Invalid input, please try again." >> play d
+        Just c -> if quantity c > 0 && checkDeck c d then return c else putStrLn "Invalid card, please try again." >> play d
+        _ -> putStrLn "Invalid input, please try again." >> play d
 
 parseCard :: String -> Maybe Card
 parseCard input = case words input of
@@ -74,6 +80,20 @@ parseCard input = case words input of
     ["Card", "Dinosaur", q] -> Just (Card Dinosaur (read q))
     _ -> Nothing
 
+game :: Deck -> Deck -> IO()
+game p1d p2d = do
+    putStrLn "Player 1's turn: "
+    let p1Move = Card Chicken 4
+    putStrLn $ "Player 1 chose " ++ show p1Move
+    
+    putStrLn "Player 2's turn: "
+    p2Move <- play p2d
+    printDeck (updateDeck p2Move p2d)
+    putStrLn $ "Battle result: " ++ show (battle p1Move p2Move)
+
+    putStrLn "Do you wish to continue the game? "
+    continue <- getLine
+    when (continue == "yes") $ game p1d p2d
 
 main :: IO ()
-main = putStrLn "Hello, Haskell!"
+main = game player1Deck player2Deck
