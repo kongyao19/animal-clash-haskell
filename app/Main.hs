@@ -49,5 +49,31 @@ battle (Card a1 q1) (Card a2 q2)
             EQ -> Draw
             GT -> P1
 
+player1Deck :: Deck
+player1Deck = createDeck
+
+player2Deck :: Deck
+player2Deck = createDeck
+
+play :: Deck -> IO Card
+play d = do
+    putStrLn "Current Deck: " 
+    mapM_ print d
+    putStr "Please choose your card: "
+    cardChoice <- getLine 
+    case parseCard cardChoice of
+        Just c -> if checkDeck c d then return c else putStrLn "Not enough cards, please try again." >> play d
+        Nothing -> putStrLn "Invalid input, please try again." >> play d
+
+parseCard :: String -> Maybe Card
+parseCard input = case words input of
+    ["Card", "Worm", q] -> Just (Card Worm (read q))
+    ["Card", "Chicken", q] -> Just (Card Chicken (read q))
+    ["Card", "Fox", q] -> Just (Card Fox (read q))
+    ["Card", "Bear", q] -> Just (Card Bear (read q))
+    ["Card", "Dinosaur", q] -> Just (Card Dinosaur (read q))
+    _ -> Nothing
+
+
 main :: IO ()
 main = putStrLn "Hello, Haskell!"
