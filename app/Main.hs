@@ -1,9 +1,10 @@
 module Main where
 
-import Control.Monad
+import System.Random
+import Data.List
 
 data Animal = Worm | Chicken | Fox | Bear | Dinosaur
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Enum, Bounded)
 
 data Card = Card {animal :: Animal, quantity :: Int}
     deriving Eq
@@ -62,6 +63,19 @@ printDeck d = do
     putStrLn "Current deck: "
     mapM_ print d
 
+drawCard :: IO Card
+drawCard = do
+    animal <- randomRIO (fromEnum (minBound :: Animal), fromEnum(maxBound :: Animal))
+    return $ Card (toEnum animal) 1
+
+addCardToDeck :: Card -> Deck -> Deck
+addCardToDeck (Card a q) d = 
+    case lookupCard a d of
+        Just (Card _ q') -> map (\c -> if animal c == a then Card a (q + q') else c) d
+        Nothing -> Card a q : d
+    where
+        lookupCard a' = find (\c -> animal c == a')
+
 play :: Deck -> IO Card
 play d = do
     printDeck d
@@ -91,9 +105,17 @@ game p1d p2d = do
     printDeck (updateDeck p2Move p2d)
     putStrLn $ "Battle result: " ++ show (battle p1Move p2Move)
 
-    putStrLn "Do you wish to continue the game? "
-    continue <- getLine
-    when (continue == "yes") $ game p1d p2d
+    case battle p1Move p2Move of 
+        P1 -> do
+            drawnCard <- drawCard
+            let newP1D = addCardToDeck drawnCard p1d
+            game newP1D (updateDeck p2Move p2d)
+        P2 -> do 
+            drawnCard <- drawCard
+            putStrLn $ "Player 2 draws " ++ show drawnCard
+            let newP2D = addCardToDeck drawnCard (updateDeck p2Move p2d)
+            game p1d newP2D
+        Draw -> game p1d (updateDeck p2Move p2d)
 
 main :: IO ()
 main = game player1Deck player2Deck
