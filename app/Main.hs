@@ -61,9 +61,9 @@ player1Deck = createDeck
 player2Deck :: Deck
 player2Deck = createDeck
 
-printDeck :: String -> Deck -> IO ()
-printDeck s d = do
-    putStrLn $ s ++ "current deck: "
+printDeck :: Deck -> IO ()
+printDeck d = do
+    putStrLn "Deck: "
     mapM_ print d
 
 drawCard :: IO Card
@@ -81,12 +81,12 @@ addCardToDeck (Card a q) d =
 
 play :: Deck -> IO Card
 play d = do
-    printDeck "\nP2 " d
+    printDeck d
     putStr "\nPlease choose your card: "
     cardChoice <- getLine 
     case parseCard cardChoice of
-        Just c -> if quantity c > 0 && checkDeck c d then return c else putStrLn "Invalid card, please try again." >> play d
-        _ -> putStrLn "Invalid input, please try again." >> play d
+        Just c -> if quantity c > 0 && checkDeck c d then return c else putStrLn "\nInvalid card, please try again.\n" >> play d
+        _ -> putStrLn "\nInvalid input, please try again.\n" >> play d
 
 parseCard :: String -> Maybe Card
 parseCard input = case words input of
@@ -99,36 +99,46 @@ parseCard input = case words input of
 
 game :: Deck -> Deck -> IO ()
 game p1d p2d 
+    | null p1d && null p2d = do
+        putStrLn "Both players hold their ground! It's an epic draw!"
+        _ <- getLine
+        askForNewGame 
     | null p1d = do
         putStrLn "Player 1 has no cards left! Player 2 emerges victorious in the Animal Clash!"
+        _ <- getLine
         askForNewGame
     | null p2d = do
         putStrLn "Player 2 has no cards left! Player 1 emerges victorious in the Animal Clash!"
+        _ <- getLine
         askForNewGame
     | otherwise = do
-        putStrLn "\nPlayer 1's turn: "
-        printDeck "\nP1 " p1d
+        putStrLn "\nA new round has begun. Ready, set, clash!"
+        _ <- getLine
+        putStrLn "Player 1's turn: \n..... \nPlayer 1 has chosen a card!"
         p1Move <- randomCard p1d
-        putStrLn $ "\nPlayer 1 chose " ++ show p1Move
-        printDeck "\nP1 " (updateDeck p1Move p1d)
-        
-        putStrLn "\nPlayer 2's turn: "
+        _ <- getLine
+
+        putStrLn "Player 2's turn: \n..... "
         p2Move <- play p2d
-        printDeck "\nP2 " (updateDeck p2Move p2d)
         
-        putStrLn $ "\nBattle result: " ++ show (battle p1Move p2Move)
+        putStrLn $ "\n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move
+        _ <- getLine
+        putStrLn $ "Battle result: " ++ show (battle p1Move p2Move)
+        _ <- getLine
         case battle p1Move p2Move of 
             P1 -> do
                 drawnCard <- drawCard
-                putStrLn $ "\nPlayer 1 draws " ++ show drawnCard
+                putStrLn "Player 1 draws a card. "
                 let newP1D = addCardToDeck drawnCard (updateDeck p1Move p1d)
-                printDeck "\nP1 " newP1D
+                _ <- getLine
                 game newP1D (updateDeck p2Move p2d)
             P2 -> do 
                 drawnCard <- drawCard
-                putStrLn $ "\nPlayer 2 draws " ++ show drawnCard
+                putStrLn $ "Player 2 draws " ++ show drawnCard ++ ". "
                 let newP2D = addCardToDeck drawnCard (updateDeck p2Move p2d)
-                printDeck "\nP2 " newP2D
+                _ <- getLine
+                printDeck newP2D
+                _ <- getLine
                 game (updateDeck p1Move p1d) newP2D
             Draw -> game (updateDeck p1Move p1d) (updateDeck p2Move p2d)
 
