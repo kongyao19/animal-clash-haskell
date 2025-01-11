@@ -61,9 +61,9 @@ player1Deck = createDeck
 player2Deck :: Deck
 player2Deck = createDeck
 
-printDeck :: Deck -> IO ()
-printDeck d = do
-    putStrLn "Current deck: "
+printDeck :: String -> Deck -> IO ()
+printDeck s d = do
+    putStrLn $ s ++ "current deck: "
     mapM_ print d
 
 drawCard :: IO Card
@@ -81,8 +81,8 @@ addCardToDeck (Card a q) d =
 
 play :: Deck -> IO Card
 play d = do
-    printDeck d
-    putStr "Please choose your card: "
+    printDeck "\nP2 " d
+    putStr "\nPlease choose your card: "
     cardChoice <- getLine 
     case parseCard cardChoice of
         Just c -> if quantity c > 0 && checkDeck c d then return c else putStrLn "Invalid card, please try again." >> play d
@@ -106,26 +106,31 @@ game p1d p2d
         putStrLn "Player 2 has no cards left! Player 1 emerges victorious in the Animal Clash!"
         askForNewGame
     | otherwise = do
-        putStrLn "Player 1's turn: "
-        let p1Move = Card Dinosaur 4
-        putStrLn $ "Player 1 chose " ++ show p1Move
+        putStrLn "\nPlayer 1's turn: "
+        printDeck "\nP1 " p1d
+        p1Move <- randomCard p1d
+        putStrLn $ "\nPlayer 1 chose " ++ show p1Move
+        printDeck "\nP1 " (updateDeck p1Move p1d)
         
-        putStrLn "Player 2's turn: "
+        putStrLn "\nPlayer 2's turn: "
         p2Move <- play p2d
-        printDeck (updateDeck p2Move p2d)
-        putStrLn $ "Battle result: " ++ show (battle p1Move p2Move)
-
+        printDeck "\nP2 " (updateDeck p2Move p2d)
+        
+        putStrLn $ "\nBattle result: " ++ show (battle p1Move p2Move)
         case battle p1Move p2Move of 
             P1 -> do
                 drawnCard <- drawCard
-                let newP1D = addCardToDeck drawnCard p1d
+                putStrLn $ "\nPlayer 1 draws " ++ show drawnCard
+                let newP1D = addCardToDeck drawnCard (updateDeck p1Move p1d)
+                printDeck "\nP1 " newP1D
                 game newP1D (updateDeck p2Move p2d)
             P2 -> do 
                 drawnCard <- drawCard
-                putStrLn $ "Player 2 draws " ++ show drawnCard
+                putStrLn $ "\nPlayer 2 draws " ++ show drawnCard
                 let newP2D = addCardToDeck drawnCard (updateDeck p2Move p2d)
-                game p1d newP2D
-            Draw -> game p1d (updateDeck p2Move p2d)
+                printDeck "\nP2 " newP2D
+                game (updateDeck p1Move p1d) newP2D
+            Draw -> game (updateDeck p1Move p1d) (updateDeck p2Move p2d)
 
 askForNewGame :: IO ()
 askForNewGame = do
@@ -135,6 +140,13 @@ askForNewGame = do
         "yes" -> game player1Deck player2Deck
         "no" -> putStrLn "Thanks for playing!"
         _ -> putStrLn "Invalid input. Please type 'yes' or 'no'." >> askForNewGame
+
+randomCard :: Deck -> IO Card
+randomCard d = do
+    randomIndex <- randomRIO (0, length d - 1)
+    let Card a maxQ = d !! randomIndex
+    randomQuantity <- randomRIO (1, maxQ)
+    return (Card a randomQuantity)
 
 main :: IO ()
 main = game player1Deck player2Deck
