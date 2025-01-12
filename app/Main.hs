@@ -11,7 +11,7 @@ data Card = Card {animal :: Animal, quantity :: Int}
     deriving Eq
 
 instance Show Card where
-    show (Card a q)= "Card " ++ show a ++ " " ++ show q
+    show (Card a q) = "Card " ++ show a ++ " " ++ show q
 
 data Winner = P1 | P2 | Draw
 
@@ -79,6 +79,13 @@ addCardToDeck (Card a q) d =
     where
         lookupCard a' = find (\c -> animal c == a')
 
+totalCards :: Deck -> Int
+totalCards = sum . map quantity
+
+cardOrCards :: Int -> String
+cardOrCards 1 = " card"
+cardOrCards _ = " cards"
+
 play :: Deck -> IO Card
 play d = do
     printDeck d
@@ -113,28 +120,28 @@ game p1d p2d
         askForNewGame
     | otherwise = do
         putStrLn "\nA new round has begun. Ready, set, clash!"
+        putStrLn $ "Player 1's deck: " ++ show (totalCards p1d) ++ cardOrCards (totalCards p1d) ++ " remaining."
+        putStrLn $ "Player 2's deck: " ++ show (totalCards p2d) ++ cardOrCards (totalCards p2d) ++ " remaining."
         _ <- getLine
         putStrLn "Player 1's turn: \n..... \nPlayer 1 has chosen a card!"
         p1Move <- randomCard p1d
         _ <- getLine
-
         putStrLn "Player 2's turn: \n..... "
         p2Move <- play p2d
-        
-        putStrLn $ "\n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move
+        putStrLn $ "\nClash! \n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move
         _ <- getLine
         putStrLn $ "Battle result: " ++ show (battle p1Move p2Move)
         _ <- getLine
         case battle p1Move p2Move of 
             P1 -> do
                 drawnCard <- drawCard
-                putStrLn "Player 1 draws a card. "
+                putStrLn "Player 1 draws a card."
                 let newP1D = addCardToDeck drawnCard (updateDeck p1Move p1d)
                 _ <- getLine
                 game newP1D (updateDeck p2Move p2d)
             P2 -> do 
                 drawnCard <- drawCard
-                putStrLn $ "Player 2 draws " ++ show drawnCard ++ ". "
+                putStrLn $ "Player 2 draws a " ++ show drawnCard ++ "."
                 let newP2D = addCardToDeck drawnCard (updateDeck p2Move p2d)
                 _ <- getLine
                 printDeck newP2D
@@ -160,7 +167,7 @@ randomCard d = do
 
 mainMenu :: IO ()
 mainMenu = do
-    putStrLn "\nMain Menu \n1. Start New Game - Begin a thrilling journey of Animal Clash! \n2. How to Play - Learn the rules and master the game. \n3. View Credits - See who made this amazing game. \n4. Exit - Say goodbye... for now."
+    putStrLn "Main Menu \n1. Start New Game - Begin a thrilling journey of Animal Clash! \n2. How to Play    - Learn the rules and master the game. \n3. View Credits   - See who made this amazing game. \n4. Exit           - Say goodbye... for now."
     putStr "Please enter your choice (1-4): "
     choice <- getLine
     handleMenuChoice choice
@@ -193,7 +200,6 @@ displayRules = do
     putStrLn "   Rank 3            : Fox      - 3 cards"
     putStrLn "   Rank 4            : Chicken  - 4 cards"
     putStrLn "   Rank 5 (Weakest)  : Worm     - 5 cards"
-    putStrLn ""
     putStrLn "2. Players take turns playing cards by selecting an animal type and a quantity."
     putStrLn "3. The winner of a round is determined as follows:"
     putStrLn "   - Higher-ranked animals defeat lower-ranked animals (e.g., Bear beats Fox)."
@@ -209,9 +215,9 @@ displayRules = do
 
 displayCredits :: IO ()
 displayCredits = do
-    putStrLn "============================"
-    putStrLn "        Game Credits        "
-    putStrLn "============================"
+    putStrLn "\n==================================="
+    putStrLn "           Game Credits           "
+    putStrLn "==================================="
     putStrLn "Game Title: Animal Clash"
     putStrLn "Developed by: Kong Yao"
     putStrLn "Special Thanks to:"
@@ -219,14 +225,14 @@ displayCredits = do
     putStrLn " - OpenAI ChatGPT for assistance"
     putStrLn " - Family and friends for support"
     putStrLn " - Haskell Community for resources"
-    putStrLn "============================"
+    putStrLn "==================================="
     putStrLn "Thank you for playing Animal Clash!"
-    putStrLn "============================"
+    putStrLn "==================================="
     
 main :: IO ()
 main = do
-    putStrLn "Welcome to Animal Clash!"
-    putStrLn "Prepare for an epic card battle where strategy and instincts collide. Will you rise as the ultimate champion?"
+    putStrLn "\nWelcome to Animal Clash!"
+    putStrLn "Prepare for an epic card battle where strategy and instincts collide. Will you rise as the ultimate champion?\n"
     mainMenu
 
     
