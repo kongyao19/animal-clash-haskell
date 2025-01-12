@@ -1,18 +1,38 @@
 module Main where
 
 import System.Random
-import Data.List
 import Data.Char
 import qualified Data.Map as Map
 
 data Animal = Worm | Chicken | Fox | Bear | Dinosaur
     deriving (Show, Eq, Ord, Enum, Bounded)
 
-data Card = Card {animal :: Animal, quantity :: Int}
+data Card a = Card {animal :: a, quantity :: Int}
     deriving Eq
 
-instance Show Card where
+instance Show a => Show (Card a) where
     show (Card a q) = "Card " ++ show a ++ " " ++ show q
+
+instance (Eq a, Bounded a) => Semigroup (Card a) where
+    (Card a1 q1) <> (Card a2 q2)
+        | q1 == 0 = Card a2 q2
+        | q2 == 0 = Card a1 q1
+        | a1 == a2 = Card a1 (q1 + q2)
+        | otherwise = mempty
+
+instance (Eq a, Bounded a) => Monoid (Card a) where
+    mempty = Card minBound 0
+
+instance Functor Card where
+    fmap f (Card a q) = Card (f a) q
+
+instance Applicative Card where
+    pure a = Card a 1
+    (Card f q) <*> (Card a q') = Card (f a) (q + q')
+
+instance Monad Card where
+    return = pure
+    (Card a q) >>= f = let (Card a' q') = f a in Card a' (q + q')
 
 data Winner = P1 | P2 | Draw
 
@@ -21,30 +41,24 @@ instance Show Winner where
     show P2 = "Player 2 has won!"
     show Draw = "Its a draw!"
 
-type Deck = [Card]
+type Deck = [Card Animal]
 
 createDeck :: Deck
 createDeck = [Card Worm 5, Card Chicken 4, Card Fox 3, Card Bear 2, Card Dinosaur 1]
 
-checkDeck :: Card -> Deck -> Bool
+checkDeck :: Card Animal -> Deck -> Bool
 checkDeck (Card a q) = any (\(Card a' q') -> a == a' && q' >= q)
 
-updateDeck :: Card -> Deck -> Deck
-updateDeck (Card a q) = foldr updateCard []
-  where
-    updateCard c@(Card a' q') acc
-      | a == a' && q' >= q = if q' - q > 0 then Card a' (q' - q) : acc else acc
-      | otherwise = c : acc
+removeFromDeck :: Card Animal -> Deck -> Deck
+removeFromDeck (Card a q) = filter (\c -> quantity c > 0) . fmap (\c -> if animal c == a then Card a (-q) <> c else c)
 
-chooseCard :: Card -> Deck -> Maybe (Card, Deck)
-chooseCard c d  
-    | checkDeck c d = Just (c, updateDeck c d)
-    | otherwise = Nothing
+addToDeck :: Card Animal -> Deck -> Deck
+addToDeck c d = if checkDeck c d then fmap (\c' -> if animal c' == animal c then c <> c' else c') d else c : d
 
-battle :: Card -> Card -> Winner
+battle :: Card Animal -> Card Animal -> Winner
 battle (Card Worm _) (Card Dinosaur _) = P1
 battle (Card Dinosaur _) (Card Worm _) = P2
-battle (Card a1 q1) (Card a2 q2) 
+battle (Card a1 q1) (Card a2 q2)
     | a1 == a2 = result q1 q2
     | otherwise = result a1 a2
     where
@@ -53,30 +67,15 @@ battle (Card a1 q1) (Card a2 q2)
             EQ -> Draw
             GT -> P1
 
-player1Deck :: Deck
-player1Deck = createDeck
-
-player2Deck :: Deck
-player2Deck = createDeck
-
 printDeck :: Deck -> IO ()
 printDeck d = do
     putStrLn "Deck: "
     mapM_ print d
 
-drawCard :: IO Card
+drawCard :: Enum a => IO (Card a)
 drawCard = do
-    a <- randomRIO (fromEnum (minBound :: Animal), fromEnum(maxBound :: Animal))
+    a <- randomRIO (fromEnum (minBound :: Animal), fromEnum (maxBound :: Animal))
     return $ Card (toEnum a) 1
-
-deckToMap :: Deck -> Map.Map Animal Int
-deckToMap = foldr (\(Card a q) acc -> Map.insertWith (+) a q acc) Map.empty
-
-mapToDeck :: Map.Map Animal Int -> Deck
-mapToDeck = Map.foldrWithKey (\a q acc -> Card a q : acc) []
-
-addCardToDeck :: Card -> Deck -> Deck
-addCardToDeck (Card a q) d = mapToDeck $ Map.insertWith (+) a q (deckToMap d)
 
 totalCards :: Deck -> Int
 totalCards = sum . map quantity
@@ -85,7 +84,7 @@ cardOrCards :: Int -> String
 cardOrCards 1 = " card"
 cardOrCards _ = " cards"
 
-play :: Deck -> IO Card
+play :: Deck -> IO (Card Animal)
 play d = do
     printDeck d
     putStr "\nPlease choose your card: Card "
@@ -98,17 +97,17 @@ play d = do
 animalMap :: Map.Map String Animal
 animalMap = Map.fromList [("worm", Worm), ("chicken", Chicken), ("fox", Fox), ("bear", Bear), ("dinosaur", Dinosaur)]
 
-parseCard :: String -> Maybe Card
+parseCard :: String -> Maybe (Card Animal)
 parseCard input = case words input of
     [a, q] -> fmap (\animal' -> Card animal' (read q)) (Map.lookup (map toLower a) animalMap)
     _ -> Nothing
 
 game :: Deck -> Deck -> IO ()
-game p1d p2d 
+game p1d p2d
     | null p1d && null p2d = do
         putStrLn "Both players hold their ground! It's an epic draw!"
         _ <- getLine
-        askForNewGame 
+        askForNewGame
     | null p1d = do
         putStrLn "Player 1 has no cards left! Player 2 emerges victorious in the Animal Clash!"
         _ <- getLine
@@ -131,33 +130,33 @@ game p1d p2d
         _ <- getLine
         putStrLn $ "Battle result: " ++ show (battle p1Move p2Move)
         _ <- getLine
-        case battle p1Move p2Move of 
+        case battle p1Move p2Move of
             P1 -> do
                 drawnCard <- drawCard
                 putStrLn "Player 1 draws a card."
-                let newP1D = addCardToDeck drawnCard (updateDeck p1Move p1d)
+                let newP1D = addToDeck drawnCard (removeFromDeck p1Move p1d)
                 _ <- getLine
-                game newP1D (updateDeck p2Move p2d)
-            P2 -> do 
+                game newP1D (removeFromDeck p2Move p2d)
+            P2 -> do
                 drawnCard <- drawCard
                 putStrLn $ "Player 2 draws a " ++ show drawnCard ++ "."
-                let newP2D = addCardToDeck drawnCard (updateDeck p2Move p2d)
+                let newP2D = addToDeck drawnCard (removeFromDeck p2Move p2d)
                 _ <- getLine
                 printDeck newP2D
                 _ <- getLine
-                game (updateDeck p1Move p1d) newP2D
-            Draw -> game (updateDeck p1Move p1d) (updateDeck p2Move p2d)
+                game (removeFromDeck p1Move p1d) newP2D
+            Draw -> game (removeFromDeck p1Move p1d) (removeFromDeck p2Move p2d)
 
 askForNewGame :: IO ()
 askForNewGame = do
     putStrLn "Do you want to start a new game? (yes/no)"
     response <- getLine
-    case map toLower response of 
-        "yes" -> game player1Deck player2Deck
+    case map toLower response of
+        "yes" -> game createDeck createDeck
         "no" -> putStrLn "\nThanks for playing!"
         _ -> putStrLn "\nInvalid input. Please type 'yes' or 'no'." >> askForNewGame
 
-randomCard :: Deck -> IO Card
+randomCard :: Deck -> IO (Card Animal)
 randomCard d = do
     randomIndex <- randomRIO (0, length d - 1)
     let Card a maxQ = d !! randomIndex
@@ -173,10 +172,10 @@ mainMenu = do
 
 handleMenuChoice :: String -> IO ()
 handleMenuChoice c = case c of
-    "1" -> do 
+    "1" -> do
         putStrLn "\nStarting a new game..."
         _ <- getLine
-        game player1Deck player2Deck
+        game createDeck createDeck
     "2" -> do
         displayRules
         _ <- getLine
@@ -227,11 +226,11 @@ displayCredits = do
     putStrLn "==================================="
     putStrLn "Thank you for playing Animal Clash!"
     putStrLn "==================================="
-    
+
 main :: IO ()
 main = do
     putStrLn "\nWelcome to Animal Clash!"
     putStrLn "Prepare for an epic card battle where strategy and instincts collide. Will you rise as the ultimate champion?\n"
     mainMenu
 
-    
+
