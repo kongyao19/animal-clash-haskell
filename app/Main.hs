@@ -3,6 +3,7 @@ module Main where
 import System.Random
 import Data.List
 import Data.Char
+import qualified Data.Map as Map
 
 data Animal = Worm | Chicken | Fox | Bear | Dinosaur
     deriving (Show, Eq, Ord, Enum, Bounded)
@@ -26,17 +27,14 @@ createDeck :: Deck
 createDeck = [Card Worm 5, Card Chicken 4, Card Fox 3, Card Bear 2, Card Dinosaur 1]
 
 checkDeck :: Card -> Deck -> Bool
-checkDeck c = any isValidCard
-    where
-        isValidCard (Card a q) = a == animal c && q >= quantity c
+checkDeck (Card a q) = any (\(Card a' q') -> a == a' && q' >= q)
 
 updateDeck :: Card -> Deck -> Deck
-updateDeck (Card a q) = filter keepCard . map updateCard
-    where
-        updateCard (Card a' q')
-            | a == a' && q' >= q = Card a' (q' - q)
-            | otherwise = Card a' q'
-        keepCard (Card _ q') = q' > 0
+updateDeck (Card a q) = foldr updateCard []
+  where
+    updateCard c@(Card a' q') acc
+      | a == a' && q' >= q = if q' - q > 0 then Card a' (q' - q) : acc else acc
+      | otherwise = c : acc
 
 chooseCard :: Card -> Deck -> Maybe (Card, Deck)
 chooseCard c d  
@@ -44,9 +42,9 @@ chooseCard c d
     | otherwise = Nothing
 
 battle :: Card -> Card -> Winner
+battle (Card Worm _) (Card Dinosaur _) = P1
+battle (Card Dinosaur _) (Card Worm _) = P2
 battle (Card a1 q1) (Card a2 q2) 
-    | a1 == Worm && a2 == Dinosaur = P1
-    | a1 == Dinosaur && a2 == Worm = P2 
     | a1 == a2 = result q1 q2
     | otherwise = result a1 a2
     where
@@ -68,16 +66,17 @@ printDeck d = do
 
 drawCard :: IO Card
 drawCard = do
-    animal <- randomRIO (fromEnum (minBound :: Animal), fromEnum(maxBound :: Animal))
-    return $ Card (toEnum animal) 1
+    a <- randomRIO (fromEnum (minBound :: Animal), fromEnum(maxBound :: Animal))
+    return $ Card (toEnum a) 1
+
+deckToMap :: Deck -> Map.Map Animal Int
+deckToMap = foldr (\(Card a q) acc -> Map.insertWith (+) a q acc) Map.empty
+
+mapToDeck :: Map.Map Animal Int -> Deck
+mapToDeck = Map.foldrWithKey (\a q acc -> Card a q : acc) []
 
 addCardToDeck :: Card -> Deck -> Deck
-addCardToDeck (Card a q) d = 
-    case lookupCard a d of
-        Just (Card _ q') -> map (\c -> if animal c == a then Card a (q + q') else c) d
-        Nothing -> Card a q : d
-    where
-        lookupCard a' = find (\c -> animal c == a')
+addCardToDeck (Card a q) d = mapToDeck $ Map.insertWith (+) a q (deckToMap d)
 
 totalCards :: Deck -> Int
 totalCards = sum . map quantity
@@ -89,19 +88,19 @@ cardOrCards _ = " cards"
 play :: Deck -> IO Card
 play d = do
     printDeck d
-    putStr "\nPlease choose your card: "
-    cardChoice <- getLine 
-    case parseCard cardChoice of
-        Just c -> if quantity c > 0 && checkDeck c d then return c else putStrLn "\nInvalid card, please try again.\n" >> play d
-        _ -> putStrLn "\nInvalid input, please try again.\n" >> play d
+    putStr "\nPlease choose your card: Card "
+    cardChoice <- getLine
+    maybe (retry d) validateCard (parseCard cardChoice)
+    where
+        retry d' = putStrLn "\nInvalid card, please try again.\n" >> play d'
+        validateCard c = if quantity c > 0 && checkDeck c d then return c else retry d
+
+animalMap :: Map.Map String Animal
+animalMap = Map.fromList [("worm", Worm), ("chicken", Chicken), ("fox", Fox), ("bear", Bear), ("dinosaur", Dinosaur)]
 
 parseCard :: String -> Maybe Card
 parseCard input = case words input of
-    ["Card", "Worm", q] -> Just (Card Worm (read q))
-    ["Card", "Chicken", q] -> Just (Card Chicken (read q))
-    ["Card", "Fox", q] -> Just (Card Fox (read q))
-    ["Card", "Bear", q] -> Just (Card Bear (read q))
-    ["Card", "Dinosaur", q] -> Just (Card Dinosaur (read q))
+    [a, q] -> fmap (\animal' -> Card animal' (read q)) (Map.lookup (map toLower a) animalMap)
     _ -> Nothing
 
 game :: Deck -> Deck -> IO ()
