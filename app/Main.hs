@@ -6,7 +6,14 @@ import qualified Data.Map as Map
 import Data.Foldable
 
 data Animal = Worm | Chicken | Fox | Bear | Dinosaur
-    deriving (Show, Eq, Ord, Enum, Bounded)
+    deriving (Eq, Ord, Enum, Bounded)
+
+instance Show Animal where
+    show Worm = "\x1b[97m\x1b[1mWorm\x1b[0m"
+    show Chicken = "\x1b[95m\x1b[1mChicken\x1b[0m"
+    show Fox = "\x1b[93m\x1b[1mFox\x1b[0m"
+    show Bear = "\x1b[92m\x1b[1mBear\x1b[0m"
+    show Dinosaur = "\x1b[91m\x1b[1mDinosaur\x1b[0m"
 
 data Card a = Card {animal :: a, quantity :: Int}
     deriving Eq
@@ -56,11 +63,11 @@ updateScore Draw gs = gs
 
 viewScore :: GameState -> IO ()
 viewScore (GameState p1 p2) = 
-    putStrLn "\n===========================================" >>
+    putStrLn "\n\x1b[94m\x1b[1m===========================================\x1b[0m" >>
     putStrLn "                 SCOREBOARD           " >>
-    putStrLn "===========================================" >>
+    putStrLn "\x1b[94m\x1b[1m===========================================\x1b[0m" >>
     putStrLn ("Player 1: " ++ show p1 ++ " points   |   Player 2: " ++ show p2 ++ " points ") >>
-    putStrLn "==========================================="
+    putStrLn "\x1b[94m\x1b[1m===========================================\x1b[0m"
 
 createDeck :: Deck
 createDeck = [Card Worm 5, Card Chicken 4, Card Fox 3, Card Bear 2, Card Dinosaur 1]
@@ -158,7 +165,7 @@ game p1d p2d u gs
         putStrLn "Player 2's turn: \n..... " >>
         chooseP2Move u p2d >>= \(upgradeUsed, p2MoveIO, updatedDeck) -> 
         p2MoveIO >>= \p2Move -> 
-        putStrLn ("\nClash! \n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move) >>
+        putStrLn ("\n\x1b[41m\x1b[1mClash!\x1b[0m \n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move) >>
         getLine >>
         putStrLn ("Battle result: " ++ show (battle p1Move p2Move)) >>
         getLine >>
@@ -189,7 +196,7 @@ askForNewGame =
     getLine >>= \response ->
     case map toLower response of
         "yes" -> game createDeck createDeck False initialGS
-        "no" -> putStrLn "\nThanks for playing!"
+        "no" -> putStrLn "\n\x1b[32m\x1b[1mThanks for playing!\x1b[0m"
         _ -> putStrLn "\nInvalid input. Please type 'yes' or 'no'." >> askForNewGame
 
 chooseP2Move :: Bool -> Deck -> IO (Bool, IO (Card Animal), Deck)
@@ -203,50 +210,50 @@ chooseP2Move u p2d
 
 mainMenu :: IO ()
 mainMenu = 
-    putStrLn "Main Menu \n1. Start New Game - Begin a thrilling journey of Animal Clash! \n2. How to Play    - Learn the rules and master the game. \n3. View Credits   - See who made this amazing game. \n4. Exit           - Say goodbye... for now." >>
+    putStrLn "\x1b[35m\x1b[1mMain Menu\x1b[0m \n\x1b[31m\x1b[1m1. Start New Game\x1b[0m - Begin a thrilling journey of Animal Clash! \n\x1b[34m\x1b[1m2. How to Play\x1b[0m    - Learn the rules and master the game. \n\x1b[33m\x1b[1m3. View Credits\x1b[0m   - See who made this amazing game. \n\x1b[37m\x1b[1m4. Exit\x1b[0m           - Say goodbye... for now." >>
     putStr "Please enter your choice (1-4): " >>
     getLine >>= handleMenuChoice 
 
 handleMenuChoice :: String -> IO ()
 handleMenuChoice c = case c of
-    "1" -> putStrLn "\nStarting a new game..." >> getLine >> game createDeck createDeck False initialGS
+    "1" -> putStrLn "\n\x1b[31m\x1b[1mStarting a new game...\x1b[0m" >> getLine >> game createDeck createDeck False initialGS
     "2" -> displayRules >> getLine >> mainMenu
     "3" -> displayCredits >> getLine >> mainMenu
-    "4" -> putStrLn "\nThanks for playing!"
+    "4" -> putStrLn "\n\x1b[32m\x1b[1mThanks for playing!\x1b[0m"
     _ -> putStrLn "\nInvalid choice. Please try again." >> mainMenu
 
 displayRules :: IO ()
 displayRules = putStrLn $ unlines
-    [ "\nHow to Play:"
+    [ "\n\x1b[34m\x1b[1mHow to Play:\x1b[0m"
     , "1. Each player starts with a deck of 15 cards."
-    , "   Rank 1 (Strongest): Dinosaur - 1 card"
-    , "   Rank 2            : Bear     - 2 cards"
-    , "   Rank 3            : Fox      - 3 cards"
-    , "   Rank 4            : Chicken  - 4 cards"
-    , "   Rank 5 (Weakest)  : Worm     - 5 cards"
-    , "2. Players take turns playing cards by selecting an animal type and a quantity."
-    , "3. The winner of a round is determined as follows:"
-    , "   - Higher-ranked animals defeat lower-ranked animals (e.g., Bear beats Fox)."
+    , "   Rank 1 (Strongest): \x1b[91m\x1b[1mDinosaur\x1b[0m - 1 card"
+    , "   Rank 2            : \x1b[92m\x1b[1mBear\x1b[0m     - 2 cards"
+    , "   Rank 3            : \x1b[93m\x1b[1mFox\x1b[0m      - 3 cards"
+    , "   Rank 4            : \x1b[95m\x1b[1mChicken\x1b[0m  - 4 cards"
+    , "   Rank 5 (Weakest)  : \x1b[97m\x1b[1mWorm\x1b[0m     - 5 cards"
+    , "\n2. Players take turns playing cards by selecting an animal type and a quantity."
+    , "\n3. The winner of a round is determined as follows:"
+    , "   - Higher-ranked animals defeat lower-ranked animals (e.g., \x1b[92m\x1b[1mBear\x1b[0m beats \x1b[93m\x1b[1mFox\x1b[0m)."
     , "   - If both players play the same animal type, the player with the higher quantity wins."
     , "   - If both the type and quantity are the same, the round is a draw."
-    , "4. Exception: Worms (Rank 5) can defeat Dinosaurs (Rank 1)!"
-    , "5. Buffing your deck: Once during the game, the player can choose to \"buff\" their deck. This will evolve all their animals to the next higher rank. For example: "
-    , "   - Worms become Chickens, Chickens become Foxes, and so on."
-    , "   - Exception: Dinosaurs will evolve into Worms! (LOL)"
-    , "6. After each round:"
+    , "\n4. Exception: \x1b[97m\x1b[1mWorms\x1b[0m (Rank 5) can defeat \x1b[91m\x1b[1mDinosaurs\x1b[0m (Rank 1)!"
+    , "\n5. Buffing your deck: Once during the game, the player can choose to \"buff\" their deck. This will evolve all their animals to the next higher rank. For example: "
+    , "   - \x1b[97m\x1b[1mWorms\x1b[0m become \x1b[95m\x1b[1mChickens\x1b[0m, \x1b[95m\x1b[1mChickens\x1b[0m become \x1b[93m\x1b[1mFoxes\x1b[0m, and so on."
+    , "   - Exception: \x1b[91m\x1b[1mDinosaurs\x1b[0m will evolve into \x1b[97m\x1b[1mWorms\x1b[0m! (LOL)"
+    , "\n6. After each round:"
     , "   - The player who wins the battle gets one point. If it's a draw, no points are awarded."
     , "   - All cards played are discarded."
     , "   - The winner draws a random card to add to their deck."
     , "   - If it's a draw, none of the players get to draw a new card."
-    , "7. The game ends when one player has no cards left in their deck. The other player is declared the winner!"
-    , "8. Use your strategy to manage your deck wisely and outsmart your opponent!"
+    , "\n7. The game ends when one player has no cards left in their deck. The other player is declared the winner!"
+    , "\n8. Use your strategy to manage your deck wisely and outsmart your opponent!"
     ]
 
 displayCredits :: IO ()
 displayCredits = putStrLn $ unlines
-    [ "\n==================================="
+    [ "\n\x1b[33m\x1b[1m===================================\x1b[0m"
     , "           Game Credits           "
-    , "==================================="
+    , "\x1b[33m\x1b[1m===================================\x1b[0m"
     , "Game Title: Animal Clash"
     , "Developed by: Kong Yao"
     , "Special Thanks to:"
@@ -254,14 +261,21 @@ displayCredits = putStrLn $ unlines
     , " - OpenAI ChatGPT for assistance"
     , " - Family and friends for support"
     , " - Haskell Community for resources"
-    , "==================================="
+    , "\x1b[33m\x1b[1m===================================\x1b[0m"
     , "Thank you for playing Animal Clash!"
-    , "==================================="
+    , "\x1b[33m\x1b[1m===================================\x1b[0m"
     ]
 
 main :: IO ()
 main = do
-    putStrLn "\nWelcome to Animal Clash!" 
+    putStrLn "\n\x1b[32m\x1b[1mWelcome to Animal Clash!\x1b[0m" 
     putStrLn "Prepare for an epic card battle where strategy and instincts collide. Will you rise as the ultimate champion?\n" 
     mainMenu
 
+--References
+-- the use of fromList from https://hackage.haskell.org/package/containers-0.7/docs/Data-Map-Internal.html#v:fromList
+-- the use of lookup from https://hackage.haskell.org/package/containers-0.7/docs/Data-Map-Internal.html#v:lookup
+-- the use of unlines from https://hackage.haskell.org/package/base-4.21.0.0/docs/Prelude.html#v:unlines
+-- the use of fromEnum from https://hackage.haskell.org/package/base-4.21.0.0/docs/Prelude.html#v:fromEnum
+-- the use of toEnum from https://hackage.haskell.org/package/base-4.21.0.0/docs/Prelude.html#v:toEnum
+-- the use of toLower from https://hackage.haskell.org/package/base-4.21.0.0/docs/Data-Char.html#v:toLower
