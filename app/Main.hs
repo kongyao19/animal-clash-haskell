@@ -42,7 +42,25 @@ instance Show Winner where
     show P2 = "Player 2 has won!"
     show Draw = "Its a draw!"
 
+data GameState = GameState {p1Score :: Int, p2Score :: Int}
+
 type Deck = [Card Animal]
+
+initialGS :: GameState
+initialGS = GameState 0 0
+
+updateScore :: Winner -> GameState -> GameState
+updateScore P1 (GameState p1 p2) = GameState (p1 + 1) p2
+updateScore P2 (GameState p1 p2) = GameState p1 (p2 + 1)
+updateScore Draw gs = gs
+
+viewScore :: GameState -> IO ()
+viewScore (GameState p1 p2) = 
+    putStrLn "\n===========================================" >>
+    putStrLn "                 SCOREBOARD           " >>
+    putStrLn "===========================================" >>
+    putStrLn ("Player 1: " ++ show p1 ++ " points   |   Player 2: " ++ show p2 ++ " points ") >>
+    putStrLn "==========================================="
 
 createDeck :: Deck
 createDeck = [Card Worm 5, Card Chicken 4, Card Fox 3, Card Bear 2, Card Dinosaur 1]
@@ -124,11 +142,11 @@ parseCard input = case words input of
     [a, q] -> (\animal' -> Card animal' (read q)) <$> Map.lookup (map toLower a) animalMap
     _ -> Nothing
 
-game :: Deck -> Deck -> Bool -> IO ()
-game p1d p2d u
-    | null p1d && null p2d = endGame "Both players hold their ground! It's an epic draw!"
-    | null p1d = endGame "Player 1 has no cards left! Player 2 emerges victorious in the Animal Clash!"
-    | null p2d = endGame "Player 2 has no cards left! Player 1 emerges victorious in the Animal Clash!"
+game :: Deck -> Deck -> Bool -> GameState -> IO ()
+game p1d p2d u gs
+    | null p1d && null p2d = endGame "Both players hold their ground! It's an epic draw!" gs
+    | null p1d = endGame "Player 1 has no cards left! Player 2 emerges victorious in the Animal Clash!" gs
+    | null p2d = endGame "Player 2 has no cards left! Player 1 emerges victorious in the Animal Clash!" gs
     | otherwise = 
         putStrLn "\nA new round has begun. Ready, set, clash!" >>
         putStrLn ("Player 1's deck: " ++ show (totalCards p1d) ++ cardOrCards (totalCards p1d) ++ " remaining.") >>
@@ -144,13 +162,14 @@ game p1d p2d u
         getLine >>
         putStrLn ("Battle result: " ++ show (battle p1Move p2Move)) >>
         getLine >>
-        case battle p1Move p2Move of
+        let updatedGS = updateScore (battle p1Move p2Move) gs 
+        in case battle p1Move p2Move of
             P1 -> 
                 drawCard >>= \drawnCard -> 
                 let newP1D = addToDeck drawnCard (removeFromDeck p1Move p1d) in
                 putStrLn "Player 1 draws a card." >>
                 getLine >>
-                game newP1D (removeFromDeck p2Move updatedDeck) upgradeUsed
+                game newP1D (removeFromDeck p2Move updatedDeck) upgradeUsed updatedGS
             P2 -> 
                 drawCard >>= \drawnCard ->
                 let newP2D = addToDeck drawnCard (removeFromDeck p2Move updatedDeck) in
@@ -158,18 +177,18 @@ game p1d p2d u
                 getLine >>
                 printDeck newP2D >>
                 getLine >>
-                game (removeFromDeck p1Move p1d) newP2D upgradeUsed
-            Draw -> game (removeFromDeck p1Move p1d) (removeFromDeck p2Move updatedDeck) upgradeUsed
+                game (removeFromDeck p1Move p1d) newP2D upgradeUsed updatedGS
+            Draw -> game (removeFromDeck p1Move p1d) (removeFromDeck p2Move updatedDeck) upgradeUsed updatedGS
 
-endGame :: String -> IO ()
-endGame message = putStrLn message >> getLine >> askForNewGame
+endGame :: String -> GameState -> IO ()
+endGame message gs = putStrLn message >> getLine >> viewScore gs >> getLine >> askForNewGame
 
 askForNewGame :: IO ()
 askForNewGame = 
     putStrLn "Do you want to start a new game? (yes/no)" >>
     getLine >>= \response ->
     case map toLower response of
-        "yes" -> game createDeck createDeck False
+        "yes" -> game createDeck createDeck False initialGS
         "no" -> putStrLn "\nThanks for playing!"
         _ -> putStrLn "\nInvalid input. Please type 'yes' or 'no'." >> askForNewGame
 
@@ -190,7 +209,7 @@ mainMenu =
 
 handleMenuChoice :: String -> IO ()
 handleMenuChoice c = case c of
-    "1" -> putStrLn "\nStarting a new game..." >> getLine >> game createDeck createDeck False
+    "1" -> putStrLn "\nStarting a new game..." >> getLine >> game createDeck createDeck False initialGS
     "2" -> displayRules >> getLine >> mainMenu
     "3" -> displayCredits >> getLine >> mainMenu
     "4" -> putStrLn "\nThanks for playing!"
@@ -211,12 +230,16 @@ displayRules = putStrLn $ unlines
     , "   - If both players play the same animal type, the player with the higher quantity wins."
     , "   - If both the type and quantity are the same, the round is a draw."
     , "4. Exception: Worms (Rank 5) can defeat Dinosaurs (Rank 1)!"
-    , "5. After each round:"
+    , "5. Buffing your deck: Once during the game, the player can choose to \"buff\" their deck. This will evolve all their animals to the next higher rank. For example: "
+    , "   - Worms become Chickens, Chickens become Foxes, and so on."
+    , "   - Exception: Dinosaurs will evolve into Worms! (LOL)"
+    , "6. After each round:"
+    , "   - The player who wins the battle gets one point. If it's a draw, no points are awarded."
     , "   - All cards played are discarded."
     , "   - The winner draws a random card to add to their deck."
     , "   - If it's a draw, none of the players get to draw a new card."
-    , "6. The game ends when one player has no cards left in their deck. The other player is declared the winner!"
-    , "7. Use your strategy to manage your deck wisely and outsmart your opponent!"
+    , "7. The game ends when one player has no cards left in their deck. The other player is declared the winner!"
+    , "8. Use your strategy to manage your deck wisely and outsmart your opponent!"
     ]
 
 displayCredits :: IO ()
