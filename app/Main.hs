@@ -3,6 +3,7 @@ module Main where
 import System.Random
 import Data.Char
 import qualified Data.Map as Map
+import Data.Foldable
 
 data Animal = Worm | Chicken | Fox | Bear | Dinosaur
     deriving (Show, Eq, Ord, Enum, Bounded)
@@ -68,28 +69,27 @@ battle (Card a1 q1) (Card a2 q2)
             GT -> P1
 
 printDeck :: Deck -> IO ()
-printDeck d = do
-    putStrLn "Deck: "
-    mapM_ print d
+printDeck d =
+    putStrLn "Deck: " >>
+    traverse_ print d
 
 drawCard :: Enum a => IO (Card a)
-drawCard = do
-    a <- randomRIO (fromEnum (minBound :: Animal), fromEnum (maxBound :: Animal))
-    return $ Card (toEnum a) 1
+drawCard =
+    randomRIO (fromEnum (minBound :: Animal), fromEnum (maxBound :: Animal)) >>=
+    \a -> return $ Card (toEnum a) 1
 
 totalCards :: Deck -> Int
-totalCards = sum . map quantity
+totalCards = sum . fmap quantity
 
 cardOrCards :: Int -> String
 cardOrCards 1 = " card"
 cardOrCards _ = " cards"
 
 randomCard :: Deck -> IO (Card Animal)
-randomCard d = do
-    randomIndex <- randomRIO (0, length d - 1)
-    let Card a maxQ = d !! randomIndex
-    randomQuantity <- randomRIO (1, maxQ)
-    return (Card a randomQuantity)
+randomCard d =
+    randomRIO (0, length d - 1) >>=
+    \randomIndex -> let Card a maxQ = d !! randomIndex in randomRIO (1, maxQ) >>=
+    \randomQuantity -> return (Card a randomQuantity)
 
 upgradeDeck :: Deck -> Deck
 upgradeDeck = fmap (upgradeCard <*>)
@@ -97,20 +97,20 @@ upgradeDeck = fmap (upgradeCard <*>)
         upgradeCard = pure (\a -> if a == Dinosaur then Worm else succ a)
 
 promptUpgrade :: Deck -> IO (Bool, Deck)
-promptUpgrade d = do
-    printDeck d
-    putStrLn "\nDo you wish to buff your cards now? (yes/no)"
-    response <- getLine
+promptUpgrade d =
+    printDeck d >>
+    putStrLn "\nDo you wish to buff your cards now? (yes/no)" >>
+    getLine >>= \response ->
     case map toLower response of
         "yes" -> return (True, upgradeDeck d)
         "no" -> return (False, d)
-        _ -> putStrLn "Invalid input. Please type 'yes' or 'no'." >> promptUpgrade d
+        _ -> putStrLn "\nInvalid input. Please type 'yes' or 'no'." >> promptUpgrade d
 
 play :: Deck -> IO (Card Animal)
-play d = do
-    printDeck d
-    putStr "\nPlease choose your card: Card "
-    cardChoice <- getLine
+play d =
+    printDeck d >>
+    putStr "\nPlease choose your card: Card " >>
+    getLine >>= \cardChoice ->
     maybe (retry d) validateCard (parseCard cardChoice)
     where
         retry d' = putStrLn "\nInvalid card, please try again.\n" >> play d'
@@ -129,48 +129,45 @@ game p1d p2d u
     | null p1d && null p2d = endGame "Both players hold their ground! It's an epic draw!"
     | null p1d = endGame "Player 1 has no cards left! Player 2 emerges victorious in the Animal Clash!"
     | null p2d = endGame "Player 2 has no cards left! Player 1 emerges victorious in the Animal Clash!"
-    | otherwise = do
-        putStrLn "\nA new round has begun. Ready, set, clash!"
-        putStrLn $ "Player 1's deck: " ++ show (totalCards p1d) ++ cardOrCards (totalCards p1d) ++ " remaining."
-        putStrLn $ "Player 2's deck: " ++ show (totalCards p2d) ++ cardOrCards (totalCards p2d) ++ " remaining."
-        _ <- getLine
-        putStrLn "Player 1's turn: \n..... \nPlayer 1 has chosen a card!"
-        p1Move <- randomCard p1d
-        _ <- getLine
-        putStrLn "Player 2's turn: \n..... "
-        (upgradeUsed, p2MoveIO, updatedDeck) <- chooseP2Move u p2d
-        p2Move <- p2MoveIO
-        putStrLn $ "\nClash! \n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move
-        _ <- getLine
-        putStrLn $ "Battle result: " ++ show (battle p1Move p2Move)
-        _ <- getLine
+    | otherwise = 
+        putStrLn "\nA new round has begun. Ready, set, clash!" >>
+        putStrLn ("Player 1's deck: " ++ show (totalCards p1d) ++ cardOrCards (totalCards p1d) ++ " remaining.") >>
+        putStrLn ("Player 2's deck: " ++ show (totalCards p2d) ++ cardOrCards (totalCards p2d) ++ " remaining.") >>
+        getLine >>
+        putStrLn "Player 1's turn: \n..... \nPlayer 1 has chosen a card!" >>
+        randomCard p1d >>= \p1Move ->
+        getLine >>
+        putStrLn "Player 2's turn: \n..... " >>
+        chooseP2Move u p2d >>= \(upgradeUsed, p2MoveIO, updatedDeck) -> 
+        p2MoveIO >>= \p2Move -> 
+        putStrLn ("\nClash! \n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move) >>
+        getLine >>
+        putStrLn ("Battle result: " ++ show (battle p1Move p2Move)) >>
+        getLine >>
         case battle p1Move p2Move of
-            P1 -> do
-                drawnCard <- drawCard
-                putStrLn "Player 1 draws a card."
-                let newP1D = addToDeck drawnCard (removeFromDeck p1Move p1d)
-                _ <- getLine
+            P1 -> 
+                drawCard >>= \drawnCard -> 
+                let newP1D = addToDeck drawnCard (removeFromDeck p1Move p1d) in
+                putStrLn "Player 1 draws a card." >>
+                getLine >>
                 game newP1D (removeFromDeck p2Move updatedDeck) upgradeUsed
-            P2 -> do
-                drawnCard <- drawCard
-                putStrLn $ "Player 2 draws a " ++ show drawnCard ++ "."
-                let newP2D = addToDeck drawnCard (removeFromDeck p2Move updatedDeck)
-                _ <- getLine
-                printDeck newP2D
-                _ <- getLine
+            P2 -> 
+                drawCard >>= \drawnCard ->
+                let newP2D = addToDeck drawnCard (removeFromDeck p2Move updatedDeck) in
+                putStrLn ("Player 2 draws a " ++ show drawnCard ++ ".") >>
+                getLine >>
+                printDeck newP2D >>
+                getLine >>
                 game (removeFromDeck p1Move p1d) newP2D upgradeUsed
             Draw -> game (removeFromDeck p1Move p1d) (removeFromDeck p2Move updatedDeck) upgradeUsed
 
 endGame :: String -> IO ()
-endGame message = do
-    putStrLn message
-    _ <- getLine
-    askForNewGame
+endGame message = putStrLn message >> getLine >> askForNewGame
 
 askForNewGame :: IO ()
-askForNewGame = do
-    putStrLn "Do you want to start a new game? (yes/no)"
-    response <- getLine
+askForNewGame = 
+    putStrLn "Do you want to start a new game? (yes/no)" >>
+    getLine >>= \response ->
     case map toLower response of
         "yes" -> game createDeck createDeck False
         "no" -> putStrLn "\nThanks for playing!"
@@ -178,82 +175,70 @@ askForNewGame = do
 
 chooseP2Move :: Bool -> Deck -> IO (Bool, IO (Card Animal), Deck)
 chooseP2Move u p2d
-    | u = do
-        p2Move <- play p2d
-        return (u, return p2Move, p2d)
-    | otherwise = do
-        (upgradeUsed, updatedDeck) <- promptUpgrade p2d
-        putStrLn ""
-        p2Move <- play updatedDeck
+    | u = play p2d >>= \p2Move -> return (u, return p2Move, p2d)
+    | otherwise = 
+        promptUpgrade p2d >>= \(upgradeUsed, updatedDeck) -> 
+        putStrLn "" >>
+        play updatedDeck >>= \p2Move ->
         return (upgradeUsed, return p2Move, updatedDeck)
 
 mainMenu :: IO ()
-mainMenu = do
-    putStrLn "Main Menu \n1. Start New Game - Begin a thrilling journey of Animal Clash! \n2. How to Play    - Learn the rules and master the game. \n3. View Credits   - See who made this amazing game. \n4. Exit           - Say goodbye... for now."
-    putStr "Please enter your choice (1-4): "
-    choice <- getLine
-    handleMenuChoice choice
+mainMenu = 
+    putStrLn "Main Menu \n1. Start New Game - Begin a thrilling journey of Animal Clash! \n2. How to Play    - Learn the rules and master the game. \n3. View Credits   - See who made this amazing game. \n4. Exit           - Say goodbye... for now." >>
+    putStr "Please enter your choice (1-4): " >>
+    getLine >>= handleMenuChoice 
 
 handleMenuChoice :: String -> IO ()
 handleMenuChoice c = case c of
-    "1" -> do
-        putStrLn "\nStarting a new game..."
-        _ <- getLine
-        game createDeck createDeck False
-    "2" -> do
-        displayRules
-        _ <- getLine
-        mainMenu
-    "3" -> do
-        displayCredits
-        _ <- getLine
-        mainMenu
+    "1" -> putStrLn "\nStarting a new game..." >> getLine >> game createDeck createDeck False
+    "2" -> displayRules >> getLine >> mainMenu
+    "3" -> displayCredits >> getLine >> mainMenu
     "4" -> putStrLn "\nThanks for playing!"
-    _ -> do
-        putStrLn "\nInvalid choice. Please try again."
-        mainMenu
+    _ -> putStrLn "\nInvalid choice. Please try again." >> mainMenu
 
 displayRules :: IO ()
-displayRules = do
-    putStrLn "\nHow to Play: "
-    putStrLn "1. Each player starts with a deck of 15 cards."
-    putStrLn "   Rank 1 (Strongest): Dinosaur - 1 card"
-    putStrLn "   Rank 2            : Bear     - 2 cards"
-    putStrLn "   Rank 3            : Fox      - 3 cards"
-    putStrLn "   Rank 4            : Chicken  - 4 cards"
-    putStrLn "   Rank 5 (Weakest)  : Worm     - 5 cards"
-    putStrLn "2. Players take turns playing cards by selecting an animal type and a quantity."
-    putStrLn "3. The winner of a round is determined as follows:"
-    putStrLn "   - Higher-ranked animals defeat lower-ranked animals (e.g., Bear beats Fox)."
-    putStrLn "   - If both players play the same animal type, the player with the higher quantity wins."
-    putStrLn "   - If both the type and quantity are the same, the round is a draw."
-    putStrLn "4. Exception: Worms (Rank 5) can defeat Dinosaurs (Rank 1)!"
-    putStrLn "5. After each round:"
-    putStrLn "   - All cards played are discarded."
-    putStrLn "   - The winner draws a random card to add to their deck."
-    putStrLn "   - If it's a draw, none of the players get to draw a new card."
-    putStrLn "6. The game ends when one player has no cards left in their deck. The other player is declared the winner!"
-    putStrLn "7. Use your strategy to manage your deck wisely and outsmart your opponent!"
+displayRules = putStrLn $ unlines
+    [ "\nHow to Play:"
+    , "1. Each player starts with a deck of 15 cards."
+    , "   Rank 1 (Strongest): Dinosaur - 1 card"
+    , "   Rank 2            : Bear     - 2 cards"
+    , "   Rank 3            : Fox      - 3 cards"
+    , "   Rank 4            : Chicken  - 4 cards"
+    , "   Rank 5 (Weakest)  : Worm     - 5 cards"
+    , "2. Players take turns playing cards by selecting an animal type and a quantity."
+    , "3. The winner of a round is determined as follows:"
+    , "   - Higher-ranked animals defeat lower-ranked animals (e.g., Bear beats Fox)."
+    , "   - If both players play the same animal type, the player with the higher quantity wins."
+    , "   - If both the type and quantity are the same, the round is a draw."
+    , "4. Exception: Worms (Rank 5) can defeat Dinosaurs (Rank 1)!"
+    , "5. After each round:"
+    , "   - All cards played are discarded."
+    , "   - The winner draws a random card to add to their deck."
+    , "   - If it's a draw, none of the players get to draw a new card."
+    , "6. The game ends when one player has no cards left in their deck. The other player is declared the winner!"
+    , "7. Use your strategy to manage your deck wisely and outsmart your opponent!"
+    ]
 
 displayCredits :: IO ()
-displayCredits = do
-    putStrLn "\n==================================="
-    putStrLn "           Game Credits           "
-    putStrLn "==================================="
-    putStrLn "Game Title: Animal Clash"
-    putStrLn "Developed by: Kong Yao"
-    putStrLn "Special Thanks to:"
-    putStrLn " - Dr. Chin Teck Min for guidance"
-    putStrLn " - OpenAI ChatGPT for assistance"
-    putStrLn " - Family and friends for support"
-    putStrLn " - Haskell Community for resources"
-    putStrLn "==================================="
-    putStrLn "Thank you for playing Animal Clash!"
-    putStrLn "==================================="
+displayCredits = putStrLn $ unlines
+    [ "\n==================================="
+    , "           Game Credits           "
+    , "==================================="
+    , "Game Title: Animal Clash"
+    , "Developed by: Kong Yao"
+    , "Special Thanks to:"
+    , " - Dr. Chin Teck Min for guidance"
+    , " - OpenAI ChatGPT for assistance"
+    , " - Family and friends for support"
+    , " - Haskell Community for resources"
+    , "==================================="
+    , "Thank you for playing Animal Clash!"
+    , "==================================="
+    ]
 
 main :: IO ()
 main = do
-    putStrLn "\nWelcome to Animal Clash!"
-    putStrLn "Prepare for an epic card battle where strategy and instincts collide. Will you rise as the ultimate champion?\n"
+    putStrLn "\nWelcome to Animal Clash!" 
+    putStrLn "Prepare for an epic card battle where strategy and instincts collide. Will you rise as the ultimate champion?\n" 
     mainMenu
 
