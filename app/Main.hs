@@ -27,7 +27,7 @@ instance Functor Card where
     fmap f (Card a q) = Card (f a) q
 
 instance Applicative Card where
-    pure a = Card a 1
+    pure a = Card a 0
     (Card f q) <*> (Card a q') = Card (f a) (q + q')
 
 instance Monad Card where
@@ -53,7 +53,7 @@ removeFromDeck :: Card Animal -> Deck -> Deck
 removeFromDeck (Card a q) = filter (\c -> quantity c > 0) . fmap (\c -> if animal c == a then Card a (-q) <> c else c)
 
 addToDeck :: Card Animal -> Deck -> Deck
-addToDeck c d = if checkDeck c d then fmap (\c' -> if animal c' == animal c then c <> c' else c') d else c : d
+addToDeck c d = if checkDeck c d then (\c' -> if animal c' == animal c then c <> c' else c') <$> d else c : d
 
 battle :: Card Animal -> Card Animal -> Winner
 battle (Card Worm _) (Card Dinosaur _) = P1
@@ -84,6 +84,28 @@ cardOrCards :: Int -> String
 cardOrCards 1 = " card"
 cardOrCards _ = " cards"
 
+randomCard :: Deck -> IO (Card Animal)
+randomCard d = do
+    randomIndex <- randomRIO (0, length d - 1)
+    let Card a maxQ = d !! randomIndex
+    randomQuantity <- randomRIO (1, maxQ)
+    return (Card a randomQuantity)
+
+upgradeDeck :: Deck -> Deck
+upgradeDeck = fmap (upgradeCard <*>)
+    where
+        upgradeCard = pure (\a -> if a == Dinosaur then Worm else succ a)
+
+promptUpgrade :: Deck -> IO (Bool, Deck)
+promptUpgrade d = do
+    printDeck d
+    putStrLn "\nDo you wish to buff your cards now? (yes/no)"
+    response <- getLine
+    case map toLower response of
+        "yes" -> return (True, upgradeDeck d)
+        "no" -> return (False, d)
+        _ -> putStrLn "Invalid input. Please type 'yes' or 'no'." >> promptUpgrade d
+
 play :: Deck -> IO (Card Animal)
 play d = do
     printDeck d
@@ -99,23 +121,14 @@ animalMap = Map.fromList [("worm", Worm), ("chicken", Chicken), ("fox", Fox), ("
 
 parseCard :: String -> Maybe (Card Animal)
 parseCard input = case words input of
-    [a, q] -> fmap (\animal' -> Card animal' (read q)) (Map.lookup (map toLower a) animalMap)
+    [a, q] -> (\animal' -> Card animal' (read q)) <$> Map.lookup (map toLower a) animalMap
     _ -> Nothing
 
-game :: Deck -> Deck -> IO ()
-game p1d p2d
-    | null p1d && null p2d = do
-        putStrLn "Both players hold their ground! It's an epic draw!"
-        _ <- getLine
-        askForNewGame
-    | null p1d = do
-        putStrLn "Player 1 has no cards left! Player 2 emerges victorious in the Animal Clash!"
-        _ <- getLine
-        askForNewGame
-    | null p2d = do
-        putStrLn "Player 2 has no cards left! Player 1 emerges victorious in the Animal Clash!"
-        _ <- getLine
-        askForNewGame
+game :: Deck -> Deck -> Bool -> IO ()
+game p1d p2d u
+    | null p1d && null p2d = endGame "Both players hold their ground! It's an epic draw!"
+    | null p1d = endGame "Player 1 has no cards left! Player 2 emerges victorious in the Animal Clash!"
+    | null p2d = endGame "Player 2 has no cards left! Player 1 emerges victorious in the Animal Clash!"
     | otherwise = do
         putStrLn "\nA new round has begun. Ready, set, clash!"
         putStrLn $ "Player 1's deck: " ++ show (totalCards p1d) ++ cardOrCards (totalCards p1d) ++ " remaining."
@@ -125,7 +138,8 @@ game p1d p2d
         p1Move <- randomCard p1d
         _ <- getLine
         putStrLn "Player 2's turn: \n..... "
-        p2Move <- play p2d
+        (upgradeUsed, p2MoveIO, updatedDeck) <- chooseP2Move u p2d
+        p2Move <- p2MoveIO
         putStrLn $ "\nClash! \n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move
         _ <- getLine
         putStrLn $ "Battle result: " ++ show (battle p1Move p2Move)
@@ -136,32 +150,42 @@ game p1d p2d
                 putStrLn "Player 1 draws a card."
                 let newP1D = addToDeck drawnCard (removeFromDeck p1Move p1d)
                 _ <- getLine
-                game newP1D (removeFromDeck p2Move p2d)
+                game newP1D (removeFromDeck p2Move updatedDeck) upgradeUsed
             P2 -> do
                 drawnCard <- drawCard
                 putStrLn $ "Player 2 draws a " ++ show drawnCard ++ "."
-                let newP2D = addToDeck drawnCard (removeFromDeck p2Move p2d)
+                let newP2D = addToDeck drawnCard (removeFromDeck p2Move updatedDeck)
                 _ <- getLine
                 printDeck newP2D
                 _ <- getLine
-                game (removeFromDeck p1Move p1d) newP2D
-            Draw -> game (removeFromDeck p1Move p1d) (removeFromDeck p2Move p2d)
+                game (removeFromDeck p1Move p1d) newP2D upgradeUsed
+            Draw -> game (removeFromDeck p1Move p1d) (removeFromDeck p2Move updatedDeck) upgradeUsed
+
+endGame :: String -> IO ()
+endGame message = do
+    putStrLn message
+    _ <- getLine
+    askForNewGame
 
 askForNewGame :: IO ()
 askForNewGame = do
     putStrLn "Do you want to start a new game? (yes/no)"
     response <- getLine
     case map toLower response of
-        "yes" -> game createDeck createDeck
+        "yes" -> game createDeck createDeck False
         "no" -> putStrLn "\nThanks for playing!"
         _ -> putStrLn "\nInvalid input. Please type 'yes' or 'no'." >> askForNewGame
 
-randomCard :: Deck -> IO (Card Animal)
-randomCard d = do
-    randomIndex <- randomRIO (0, length d - 1)
-    let Card a maxQ = d !! randomIndex
-    randomQuantity <- randomRIO (1, maxQ)
-    return (Card a randomQuantity)
+chooseP2Move :: Bool -> Deck -> IO (Bool, IO (Card Animal), Deck)
+chooseP2Move u p2d
+    | u = do
+        p2Move <- play p2d
+        return (u, return p2Move, p2d)
+    | otherwise = do
+        (upgradeUsed, updatedDeck) <- promptUpgrade p2d
+        putStrLn ""
+        p2Move <- play updatedDeck
+        return (upgradeUsed, return p2Move, updatedDeck)
 
 mainMenu :: IO ()
 mainMenu = do
@@ -175,7 +199,7 @@ handleMenuChoice c = case c of
     "1" -> do
         putStrLn "\nStarting a new game..."
         _ <- getLine
-        game createDeck createDeck
+        game createDeck createDeck False
     "2" -> do
         displayRules
         _ <- getLine
@@ -232,5 +256,4 @@ main = do
     putStrLn "\nWelcome to Animal Clash!"
     putStrLn "Prepare for an epic card battle where strategy and instincts collide. Will you rise as the ultimate champion?\n"
     mainMenu
-
 
