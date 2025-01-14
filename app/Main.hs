@@ -47,7 +47,7 @@ data Winner = P1 | P2 | Draw
 instance Show Winner where
     show P1 = "Player 1 has won!"
     show P2 = "Player 2 has won!"
-    show Draw = "Its a draw!"
+    show Draw = "It's a draw!"
 
 data GameState = GameState {p1Score :: Int, p2Score :: Int}
 
@@ -66,7 +66,7 @@ viewScore (GameState p1 p2) =
     putStrLn "\n\x1b[94m\x1b[1m===========================================\x1b[0m" >>
     putStrLn "                 SCOREBOARD           " >>
     putStrLn "\x1b[94m\x1b[1m===========================================\x1b[0m" >>
-    putStrLn ("Player 1: " ++ show p1 ++ " points   |   Player 2: " ++ show p2 ++ " points ") >>
+    putStrLn (" Player 1: " ++ show p1 ++ " points  |  Player 2: " ++ show p2 ++ " points ") >>
     putStrLn "\x1b[94m\x1b[1m===========================================\x1b[0m"
 
 createDeck :: Deck
@@ -81,22 +81,15 @@ removeFromDeck (Card a q) = filter (\c -> quantity c > 0) . fmap (\c -> if anima
 addToDeck :: Card Animal -> Deck -> Deck
 addToDeck c d = if checkDeck c d then (\c' -> if animal c' == animal c then c <> c' else c') <$> d else c : d
 
-battle :: Card Animal -> Card Animal -> Winner
-battle (Card Worm _) (Card Dinosaur _) = P1
-battle (Card Dinosaur _) (Card Worm _) = P2
-battle (Card a1 q1) (Card a2 q2)
-    | a1 == a2 = result q1 q2
-    | otherwise = result a1 a2
-    where
-        result x y = case compare x y of
-            LT -> P2
-            EQ -> Draw
-            GT -> P1
-
 printDeck :: Deck -> IO ()
 printDeck d =
     putStrLn "Deck: " >>
     traverse_ print d
+
+upgradeDeck :: Deck -> Deck
+upgradeDeck = fmap (upgradeCard <*>)
+    where
+        upgradeCard = pure (\a -> if a == Dinosaur then Worm else succ a)
 
 drawCard :: Enum a => IO (Card a)
 drawCard =
@@ -116,10 +109,17 @@ randomCard d =
     \randomIndex -> let Card a maxQ = d !! randomIndex in randomRIO (1, maxQ) >>=
     \randomQuantity -> return (Card a randomQuantity)
 
-upgradeDeck :: Deck -> Deck
-upgradeDeck = fmap (upgradeCard <*>)
+battle :: Card Animal -> Card Animal -> Winner
+battle (Card Worm _) (Card Dinosaur _) = P1
+battle (Card Dinosaur _) (Card Worm _) = P2
+battle (Card a1 q1) (Card a2 q2)
+    | a1 == a2 = result q1 q2
+    | otherwise = result a1 a2
     where
-        upgradeCard = pure (\a -> if a == Dinosaur then Worm else succ a)
+        result x y = case compare x y of
+            LT -> P2
+            EQ -> Draw
+            GT -> P1
 
 promptUpgrade :: Deck -> IO (Bool, Deck)
 promptUpgrade d =
@@ -141,6 +141,15 @@ play d =
         retry d' = putStrLn "\nInvalid card, please try again.\n" >> play d'
         validateCard c = if quantity c > 0 && checkDeck c d then return c else retry d
 
+askForNewGame :: IO ()
+askForNewGame = 
+    putStrLn "Do you want to start a new game? (yes/no)" >>
+    getLine >>= \response ->
+    case map toLower response of
+        "yes" -> game createDeck createDeck False initialGS
+        "no" -> putStrLn "\n\x1b[32m\x1b[1mThanks for playing!\x1b[0m"
+        _ -> putStrLn "\nInvalid input. Please type 'yes' or 'no'." >> askForNewGame
+
 animalMap :: Map.Map String Animal
 animalMap = Map.fromList [("worm", Worm), ("chicken", Chicken), ("fox", Fox), ("bear", Bear), ("dinosaur", Dinosaur)]
 
@@ -155,17 +164,17 @@ game p1d p2d u gs
     | null p1d = endGame "Player 1 has no cards left! Player 2 emerges victorious in the Animal Clash!" gs
     | null p2d = endGame "Player 2 has no cards left! Player 1 emerges victorious in the Animal Clash!" gs
     | otherwise = 
-        putStrLn "\nA new round has begun. Ready, set, clash!" >>
+        putStrLn "\n=========================================\nA new round has begun. Ready, set, clash!\n=========================================" >>
         putStrLn ("Player 1's deck: " ++ show (totalCards p1d) ++ cardOrCards (totalCards p1d) ++ " remaining.") >>
         putStrLn ("Player 2's deck: " ++ show (totalCards p2d) ++ cardOrCards (totalCards p2d) ++ " remaining.") >>
         getLine >>
-        putStrLn "Player 1's turn: \n..... \nPlayer 1 has chosen a card!" >>
+        putStrLn "================\nPlayer 1's turn: \n================\nPlayer 1 has chosen a card!" >>
         randomCard p1d >>= \p1Move ->
         getLine >>
-        putStrLn "Player 2's turn: \n..... " >>
-        chooseP2Move u p2d >>= \(upgradeUsed, p2MoveIO, updatedDeck) -> 
+        putStrLn "================\nPlayer 2's turn: \n================" >>
+        checkUpgrade u p2d >>= \(upgradeUsed, p2MoveIO, updatedDeck) -> 
         p2MoveIO >>= \p2Move -> 
-        putStrLn ("\n\x1b[41m\x1b[1mClash!\x1b[0m \n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move) >>
+        putStrLn ("\n======\n\x1b[41m\x1b[1mClash!\x1b[0m\n======\n(P1) " ++ show p1Move ++ " vs. (P2) " ++ show p2Move) >>
         getLine >>
         putStrLn ("Battle result: " ++ show (battle p1Move p2Move)) >>
         getLine >>
@@ -190,17 +199,8 @@ game p1d p2d u gs
 endGame :: String -> GameState -> IO ()
 endGame message gs = putStrLn message >> getLine >> viewScore gs >> getLine >> askForNewGame
 
-askForNewGame :: IO ()
-askForNewGame = 
-    putStrLn "Do you want to start a new game? (yes/no)" >>
-    getLine >>= \response ->
-    case map toLower response of
-        "yes" -> game createDeck createDeck False initialGS
-        "no" -> putStrLn "\n\x1b[32m\x1b[1mThanks for playing!\x1b[0m"
-        _ -> putStrLn "\nInvalid input. Please type 'yes' or 'no'." >> askForNewGame
-
-chooseP2Move :: Bool -> Deck -> IO (Bool, IO (Card Animal), Deck)
-chooseP2Move u p2d
+checkUpgrade :: Bool -> Deck -> IO (Bool, IO (Card Animal), Deck)
+checkUpgrade u p2d
     | u = play p2d >>= \p2Move -> return (u, return p2Move, p2d)
     | otherwise = 
         promptUpgrade p2d >>= \(upgradeUsed, updatedDeck) -> 
@@ -279,3 +279,4 @@ main = do
 -- the use of fromEnum from https://hackage.haskell.org/package/base-4.21.0.0/docs/Prelude.html#v:fromEnum
 -- the use of toEnum from https://hackage.haskell.org/package/base-4.21.0.0/docs/Prelude.html#v:toEnum
 -- the use of toLower from https://hackage.haskell.org/package/base-4.21.0.0/docs/Data-Char.html#v:toLower
+-- the use of randomRIO from https://hackage.haskell.org/package/random-1.3.0/docs/System-Random.html#v:randomRIO
