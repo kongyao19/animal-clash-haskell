@@ -120,4 +120,4 @@ The challenges faced during development, particularly with game loop organizatio
 
 ---
 
-*This project was developed as part of a functional programming principles course, showcasing the practical application of Haskell in game development.*
+*This project was developed as part of the Functional Programming Principles course, showcasing the practical application of Haskell in game development.*
