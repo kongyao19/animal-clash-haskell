@@ -110,7 +110,7 @@ The challenges faced during development, particularly with game loop organizatio
 ## Credits
 
 **Developer**: Kong Yao  
-**Institution**: Sunway University, School of Engineering and Technology, BSc (Hons) Computer Science  
+**Institution**: Sunway University, School of Engineering and Technology, BSc (Hons) in Computer Science  
 **Course**: PRG2214 - Functional Programming Principles  
 **Academic Session**: September 2024
 
